@@ -1,3 +1,9 @@
+import spotipy
+import urllib
+import os
+import time
+from logzero import logger as log
+
 from spotdl import const
 from spotdl import metadata
 from spotdl import convert
@@ -5,30 +11,29 @@ from spotdl import internals
 from spotdl import spotify_tools
 from spotdl import youtube_tools
 
-import spotipy
-from logzero import logger as log
-import os
-
 
 class CheckExists:
     def __init__(self, music_file, meta_tags=None):
-        self.music_file = music_file
         self.meta_tags = meta_tags
+        basepath, filename = os.path.split(music_file)
+        filepath = os.path.join(const.args.folder, basepath)
+        os.makedirs(filepath, exist_ok=True)
+        self.filepath = filepath
+        self.filename = filename
 
     def already_exists(self, raw_song):
         """ Check if the input song already exists in the given folder. """
         log.debug(
             "Cleaning any temp files and checking "
-            'if "{}" already exists'.format(self.music_file)
+            'if "{}" already exists'.format(self.filename)
         )
-        songs = os.listdir(const.args.folder)
+        songs = os.listdir(self.filepath)
         self._remove_temp_files(songs)
 
         for song in songs:
             # check if a song with the same name is already present in the given folder
             if self._match_filenames(song):
-                if internals.is_spotify(raw_song) and \
-                        not self._has_metadata(song):
+                if internals.is_spotify(raw_song) and not self._has_metadata(song):
                     return False
 
                 log.warning('"{}" already exists'.format(song))
@@ -44,27 +49,24 @@ class CheckExists:
     def _remove_temp_files(self, songs):
         for song in songs:
             if song.endswith(".temp"):
-                os.remove(os.path.join(const.args.folder, song))
+                os.remove(os.path.join(self.filepath, song))
 
     def _has_metadata(self, song):
         # check if the already downloaded song has correct metadata
         # if not, remove it and download again without prompt
         already_tagged = metadata.compare(
-            os.path.join(const.args.folder, song), self.meta_tags
+            os.path.join(self.filepath, song), self.meta_tags
         )
-        log.debug(
-            "Checking if it is already tagged correctly? {}", already_tagged
-        )
+        log.debug("Checking if it is already tagged correctly? {}", already_tagged)
         if not already_tagged:
-            os.remove(os.path.join(const.args.folder, song))
+            os.remove(os.path.join(self.filepath, song))
             return False
 
         return True
 
     def _prompt_song(self, song):
         log.info(
-            '"{}" has already been downloaded. '
-            "Re-download? (y/N): ".format(song)
+            '"{}" has already been downloaded. ' "Re-download? (y/N): ".format(song)
         )
         prompt = input("> ")
         if prompt.lower() == "y":
@@ -82,7 +84,7 @@ class CheckExists:
         return True
 
     def _match_filenames(self, song):
-        if os.path.splitext(song)[0] == self.music_file:
+        if os.path.splitext(song)[0] == self.filename:
             log.debug('Found an already existing song: "{}"'.format(song))
             return True
 
@@ -133,10 +135,10 @@ class Downloader:
                     trim_silence=const.args.trim_silence,
                 )
             except FileNotFoundError:
+                encoder = "avconv" if const.args.avconv else "ffmpeg"
+                log.warning("Could not find {0}, skip encoding".format(encoder))
                 output_song = self.unconverted_filename(songname)
 
-            if not const.args.input_ext == const.args.output_ext:
-                os.remove(os.path.join(const.args.folder, input_song))
             if not const.args.no_metadata and self.meta_tags is not None:
                 metadata.embed(
                     os.path.join(const.args.folder, output_song), self.meta_tags
@@ -165,16 +167,12 @@ class Downloader:
             if not refined_songname == " - ":
                 songname = refined_songname
         else:
-            if not const.args.no_metadata:
-                log.warning("Could not find metadata")
             songname = internals.sanitize_title(songname)
 
         return songname
 
     @staticmethod
     def unconverted_filename(songname):
-        encoder = "avconv" if const.args.avconv else "ffmpeg"
-        log.warning("Could not find {0}, skipping conversion".format(encoder))
         const.args.output_ext = const.args.input_ext
         output_song = songname + const.args.output_ext
         return output_song
@@ -208,12 +206,8 @@ class ListDownloader:
             try:
                 track_dl = Downloader(raw_song, number=number)
                 track_dl.download_single()
-            except spotipy.client.SpotifyException:
-                # token expires after 1 hour
-                self._regenerate_token()
-                track_dl.download_single()
-            # detect network problems
             except (urllib.request.URLError, TypeError, IOError) as e:
+                # detect network problems
                 self._cleanup(raw_song, e)
                 # TODO: remove this sleep once #397 is fixed
                 # wait 0.5 sec to avoid infinite looping
@@ -238,11 +232,6 @@ class ListDownloader:
         log.debug("Adding downloaded song to write successful file")
         with open(self.write_successful_file, "a") as f:
             f.write("\n" + raw_song)
-
-    @staticmethod
-    def _regenerate_token():
-        log.debug("Token expired, generating new one and authorizing")
-        spotify_tools.refresh_token()
 
     def _cleanup(self, raw_song, exception):
         self.tracks.append(raw_song)

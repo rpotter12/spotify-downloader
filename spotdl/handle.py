@@ -1,13 +1,14 @@
-import appdirs
-from spotdl import internals
 from logzero import logger as log
+import appdirs
 
 import logging
 import yaml
 import argparse
 import mimetypes
-
 import os
+
+import spotdl
+from spotdl import internals
 
 
 _LOG_LEVELS_STR = ["INFO", "WARNING", "ERROR", "DEBUG"]
@@ -16,11 +17,13 @@ default_conf = {
     "spotify-downloader": {
         "manual": False,
         "no-metadata": False,
+        "no-fallback-metadata": False,
         "avconv": False,
         "folder": internals.get_music_dir(),
         "overwrite": "prompt",
         "input-ext": ".m4a",
         "output-ext": ".mp3",
+        "write-to": None,
         "trim-silence": False,
         "download-only-metadata": False,
         "dry-run": False,
@@ -32,6 +35,8 @@ default_conf = {
         "skip": None,
         "write-successful": None,
         "log-level": "INFO",
+        "spotify_client_id": "4fe3fecfe5334023a1472516cc99d805",
+        "spotify_client_secret": "0f02b7c483c04257984695007a4a8d5c"
     }
 }
 
@@ -53,7 +58,7 @@ def merge(default, config):
 def get_config(config_file):
     try:
         with open(config_file, "r") as ymlfile:
-            cfg = yaml.load(ymlfile)
+            cfg = yaml.safe_load(ymlfile)
     except FileNotFoundError:
         log.info("Writing default configuration to {0}:".format(config_file))
         with open(config_file, "w") as ymlfile:
@@ -99,10 +104,7 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
         group = parser.add_mutually_exclusive_group(required=True)
 
         group.add_argument(
-            "-s",
-            "--song",
-            nargs='+',
-            help="download track by spotify link or name"
+            "-s", "--song", nargs="+", help="download track by spotify link or name"
         )
         group.add_argument("-l", "--list", help="download tracks from a file")
         group.add_argument(
@@ -116,28 +118,25 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
         group.add_argument(
             "-ab",
             "--all-albums",
-            help="load all tracks from artist URL into <artist_name>.txt"
+            help="load all tracks from artist URL into <artist_name>.txt",
         )
         group.add_argument(
             "-u",
             "--username",
             help="load tracks from user's playlist into <playlist_name>.txt",
         )
-        group.add_argument(
-            "-V", "--version", help="show version and exit", action="store_true"
-        )
 
     parser.add_argument(
-        '--write-m3u',
+        "--write-m3u",
         help="generate an .m3u playlist file with youtube links given "
-             "a text file containing tracks",
-        action='store_true'
+        "a text file containing tracks",
+        action="store_true",
     )
     parser.add_argument(
         "-m",
         "--manual",
         default=config["manual"],
-        help="choose the track to download manually from a list " "of matching tracks",
+        help="choose the track to download manually from a list of matching tracks",
         action="store_true",
     )
     parser.add_argument(
@@ -145,6 +144,13 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
         "--no-metadata",
         default=config["no-metadata"],
         help="do not embed metadata in tracks",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-nf",
+        "--no-fallback-metadata",
+        default=config["no-fallback-metadata"],
+        help="do not use YouTube as fallback for metadata if track not found on Spotify",
         action="store_true",
     )
     parser.add_argument(
@@ -178,6 +184,11 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
         "--output-ext",
         default=config["output-ext"],
         help="preferred output format .mp3, .m4a (AAC), .flac, etc.",
+    )
+    parser.add_argument(
+        "--write-to",
+        default=config["write-to"],
+        help="write tracks from Spotify playlist, album, etc. to this file",
     )
     parser.add_argument(
         "-ff",
@@ -258,7 +269,25 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
         help="path to file to write successful tracks to",
     )
     parser.add_argument(
+        "-sci",
+        "--spotify-client-id",
+        default=config["spotify_client_id"],
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "-scs",
+        "--spotify-client-secret",
+        default=config["spotify_client_secret"],
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
         "-c", "--config", default=None, help="path to custom config.yml file"
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {}".format(spotdl.__version__),
     )
 
     parsed = parser.parse_args(raw_args)
@@ -266,12 +295,28 @@ def get_arguments(raw_args=None, to_group=True, to_merge=True):
     if parsed.config is not None and to_merge:
         parsed = override_config(parsed.config, parser)
 
-    if to_group and parsed.list and \
-            not mimetypes.MimeTypes().guess_type(parsed.list)[0] == "text/plain":
-        parser.error("{0} is not of a valid argument to --list, argument must be plain text file".format(parsed.list))
+    if (
+        to_group
+        and parsed.list
+        and not mimetypes.MimeTypes().guess_type(parsed.list)[0] == "text/plain"
+    ):
+        parser.error(
+            "{0} is not of a valid argument to --list, argument must be plain text file".format(
+                parsed.list
+            )
+        )
 
     if parsed.write_m3u and not parsed.list:
-        parser.error('--write-m3u can only be used with --list')
+        parser.error("--write-m3u can only be used with --list")
+
+    if parsed.avconv and parsed.trim_silence:
+        parser.error("--trim-silence can only be used with FFmpeg")
+
+    if parsed.write_to and not (parsed.playlist \
+            or parsed.album \
+            or parsed.all_albums \
+            or parsed.username):
+        parser.error("--write-to can only be used with --playlist, --album, --all-albums, or --username")
 
     parsed.log_level = log_leveller(parsed.log_level)
 

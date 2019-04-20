@@ -1,38 +1,45 @@
 import spotipy
 import spotipy.oauth2 as oauth2
 import lyricwikia
-from logzero import logger as log
-
-from spotdl import internals
 
 from slugify import slugify
 from titlecase import titlecase
+from logzero import logger as log
 import pprint
 import sys
+import os
+import functools
+
+from spotdl import const
+from spotdl import internals
+
+spotify = None
 
 
 def generate_token():
-    """ Generate the token. Please respect these credentials :) """
+    """ Generate the token. """
     credentials = oauth2.SpotifyClientCredentials(
-        client_id="4fe3fecfe5334023a1472516cc99d805",
-        client_secret="0f02b7c483c04257984695007a4a8d5c",
+        client_id=const.args.spotify_client_id,
+        client_secret=const.args.spotify_client_secret,
     )
     token = credentials.get_access_token()
     return token
 
 
-def refresh_token():
-    """ Refresh expired token"""
-    global spotify
-    new_token = generate_token()
-    spotify = spotipy.Spotify(auth=new_token)
+def must_be_authorized(func, spotify=spotify):
+    def wrapper(*args, **kwargs):
+        global spotify
+        try:
+            assert spotify
+            return func(*args, **kwargs)
+        except (AssertionError, spotipy.client.SpotifyException):
+            token = generate_token()
+            spotify = spotipy.Spotify(auth=token)
+            return func(*args, **kwargs)
+    return wrapper
 
-# token is mandatory when using Spotify's API
-# https://developer.spotify.com/news-stories/2017/01/27/removing-unauthenticated-calls-to-the-web-api/
-token = generate_token()
-spotify = spotipy.Spotify(auth=token)
 
-
+@must_be_authorized
 def generate_metadata(raw_song):
     """ Fetch a song's metadata from Spotify. """
     if internals.is_spotify(raw_song):
@@ -78,6 +85,7 @@ def generate_metadata(raw_song):
     # Some sugar
     meta_tags["year"], *_ = meta_tags["release_date"].split("-")
     meta_tags["duration"] = meta_tags["duration_ms"] / 1000.0
+    meta_tags["spotify_metadata"] = True
     # Remove unwanted parameters
     del meta_tags["duration_ms"]
     del meta_tags["available_markets"]
@@ -87,12 +95,15 @@ def generate_metadata(raw_song):
     return meta_tags
 
 
+@must_be_authorized
 def write_user_playlist(username, text_file=None):
+    """ Write user playlists to text_file """
     links = get_playlists(username=username)
     playlist = internals.input_link(links)
     return write_playlist(playlist, text_file)
 
 
+@must_be_authorized
 def get_playlists(username):
     """ Fetch user playlists when using the -u option. """
     playlists = spotify.user_playlists(username)
@@ -121,6 +132,7 @@ def get_playlists(username):
     return links
 
 
+@must_be_authorized
 def fetch_playlist(playlist):
     try:
         playlist_id = internals.extract_spotify_id(playlist)
@@ -140,6 +152,7 @@ def fetch_playlist(playlist):
     return results
 
 
+@must_be_authorized
 def write_playlist(playlist_url, text_file=None):
     playlist = fetch_playlist(playlist_url)
     tracks = playlist["tracks"]
@@ -148,19 +161,21 @@ def write_playlist(playlist_url, text_file=None):
     return write_tracks(tracks, text_file)
 
 
+@must_be_authorized
 def fetch_album(album):
     album_id = internals.extract_spotify_id(album)
     album = spotify.album(album_id)
     return album
 
 
-def fetch_album_from_artist(artist_url, album_type="album"):
+@must_be_authorized
+def fetch_albums_from_artist(artist_url, album_type=None):
     """
     This funcction returns all the albums from a give artist_url using the US
     market
     :param artist_url - spotify artist url
     :param album_type - the type of album to fetch (ex: single) the default is
-                        a standard album
+                        all albums
     :param return - the album from the artist
     """
 
@@ -179,6 +194,7 @@ def fetch_album_from_artist(artist_url, album_type="album"):
     return albums
 
 
+@must_be_authorized
 def write_all_albums_from_artist(artist_url, text_file=None):
     """
     This function gets all albums from an artist and writes it to a file in the
@@ -191,7 +207,7 @@ def write_all_albums_from_artist(artist_url, text_file=None):
     album_base_url = "https://open.spotify.com/album/"
 
     # fetching all default albums
-    albums = fetch_album_from_artist(artist_url)
+    albums = fetch_albums_from_artist(artist_url, album_type=None)
 
     # if no file if given, the default save file is in the current working
     # directory with the name of the artist
@@ -203,14 +219,8 @@ def write_all_albums_from_artist(artist_url, text_file=None):
         log.info("Fetching album: " + album["name"])
         write_album(album_base_url + album["id"], text_file=text_file)
 
-    # fetching all single albums
-    singles = fetch_album_from_artist(artist_url, album_type="single")
 
-    for single in singles:
-        log.info("Fetching single: " + single["name"])
-        write_album(album_base_url + single["id"], text_file=text_file)
-
-
+@must_be_authorized
 def write_album(album_url, text_file=None):
     album = fetch_album(album_url)
     tracks = spotify.album_tracks(album["id"])
@@ -219,6 +229,7 @@ def write_album(album_url, text_file=None):
     return write_tracks(tracks, text_file)
 
 
+@must_be_authorized
 def write_tracks(tracks, text_file):
     log.info(u"Writing {0} tracks to {1}".format(tracks["total"], text_file))
     track_urls = []

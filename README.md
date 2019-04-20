@@ -30,7 +30,7 @@ If you still need to use Python 2 - check out the (outdated)
 spotify-downloader works with all major distributions and even on low-powered devices such as a Raspberry Pi.
 
 spotify-downloader can be installed via pip with:
-```
+```console
 $ pip3 install spotdl
 ```
 
@@ -41,7 +41,7 @@ page for detailed OS-specific instructions to get it and other dependencies it r
 
 For the most basic usage, downloading tracks is as easy as
 
-```
+```console
 $ spotdl --song https://open.spotify.com/track/2DGa7iaidT5s0qnINlwMjJ
 $ spotdl --song "ncs - spectre"
 ```
@@ -49,7 +49,7 @@ $ spotdl --song "ncs - spectre"
 For downloading playlist and albums, you need to first load all the tracks into text file and then pass
 this text file to `--list` argument. Here is how you would do it for a playlist
 
-```
+```console
 $ spotdl --playlist https://open.spotify.com/user/nocopyrightsounds/playlist/7sZbq8QGyMnhKPcLJvCUFD
 INFO: Writing 62 tracks to ncs-releases.txt
 $ spotdl --list ncs-releases.txt
@@ -108,11 +108,7 @@ contains detailed information about different available ways to download tracks.
 
 ## FAQ
 
-- [
-How to specify a custom folder where tracks should be downloaded?](https://github.com/ritiek/spotify-downloader/wiki/FAQ#how-to-specify-a-custom-folder-where-tracks-should-be-downloaded)
-
-Check out our [FAQ wiki page](https://github.com/ritiek/spotify-downloader/wiki/FAQ)
-for more info.
+All FAQs will be mentioned in our [FAQ wiki page](https://github.com/ritiek/spotify-downloader/wiki/FAQ).
 
 ## Contributing
 
@@ -120,7 +116,7 @@ Check out [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
 ## Running Tests
 
-```
+```console
 $ python3 -m pytest test
 ```
 

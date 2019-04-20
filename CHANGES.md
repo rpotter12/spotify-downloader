@@ -5,14 +5,54 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
 ### Added
+-
+
+### Fixed
+-
+
+### Changed
+- Removed duplicate debug log entry from `internals.trim_song` ([@ritiek](https://github.com/ritiek)) (#519)
+- Fix YAMLLoadWarning ([@cyberboysumanjay](https://github.com/cyberboysumanjay)) (#517)
+
+## [1.2.0] - 2019-03-01
+### Added
+- `--write-to` parameter for setting custom file to write Spotify track URLs to ([@ritiek](https://github.com/ritiek)) (#507)
+- Set custom Spotify Client ID and Client Secret via config.yml ([@ManveerBasra](https://github.com/ManveerBasra)) (#502)
+- Use YouTube as fallback metadata if track not found on Spotify. Also added `--no-fallback-metadata`
+  to preserve old behaviour ([@ritiek](https://github.com/ritiek)) (#457)
+
+### Fixed
+- Fix already downloaded prompt when using "/" in `--file-format` to create sub-directories ([@ritiek](https://github.com/ritiek)) (#503)
+- Fix writing playlist tracks to file ([@ritiek](https://github.com/ritiek)) (#506)
+
+## [1.1.2] - 2019-02-10
+### Changed
+- Fetch all artist albums by default instead of only fetching the "album" type ([@ritiek](https://github.com/ritiek)) (#493)
+- Option `-f` (`--folder`) is used when exporting text files using `-p` (`--playlist`) for playlists or `-b` (`--album`) for albums ([@Silverfeelin](https://github.com/Silverfeelin)) (#476)
+- Use first artist from album object for album artist ([@tillhainbach](https://github.com/tillhainbach))
+
+### Fixed
+- Fix renaming files when encoder is not found ([@ritiek](https://github.com/ritiek)) (#475)
+- Add missing `import time` ([@ifduyue](https://github.com/ifduyue)) (#465)
+
+## [1.1.1] - 2019-01-03
+### Added
+- Output informative message in case of no result found in YouTube search ([@Amit-L](https://github.com/Amit-L)) (#452)
 - Ability to pass multiple tracks with `-s` option ([@ritiek](https://github.com/ritiek)) (#442)
 
 ### Changed
+- Allowed to fetch metadata from Spotify upon searching Spotify-URL and  `--no-metadata` to gather YouTube custom-search fields ([@Amit-L](https://github.com/Amit-L)) (#452)
+- Change FFmpeg to use the built-in encoder `aac` instead of 3rd party `libfdk-aac` which does not
+  ship with the apt package ([@ritiek](https://github.com/ritiek)) (#448)
+- Monkeypatch ever-changing network-relying tests ([@ritiek](https://github.com/ritiek)) (#448)
+- Correct `.m4a` container before writing metadata so metadata fields shows up properly in
+  media players (especially iTunes) ([@ritiek](https://github.com/ritiek) with thanks to [@Amit-L](https://github.com/Amit-L)!) (#453)
 - Refactored core downloading module ([@ritiek](https://github.com/ritiek)) (#410)
 
 ### Fixed
+- Workaround conversion conflicts when input and output filename are same ([@ritiek](https://github.com/ritiek)) (#459)
+- Applied a check on result in case of search using Spotify-URL  `--no-metadata` option ([@Amit-L](https://github.com/Amit-L)) (#452)
 - Included a missing `import spotipy` in downloader.py ([@ritiek](https://github.com/ritiek)) (#440)
 
 ## [1.1.0] - 2018-11-13

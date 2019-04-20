@@ -2,10 +2,11 @@ from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, TORY, TYER, TPUB, APIC, USLT, COMM
 from mutagen.mp4 import MP4, MP4Cover
 from mutagen.flac import Picture, FLAC
-from logzero import logger as log
-from spotdl.const import TAG_PRESET, M4A_TAG_PRESET
 
 import urllib.request
+from logzero import logger as log
+
+from spotdl.const import TAG_PRESET, M4A_TAG_PRESET
 
 
 def compare(music_file, metadata):
@@ -45,6 +46,8 @@ class EmbedMetadata:
     def __init__(self, music_file, meta_tags):
         self.music_file = music_file
         self.meta_tags = meta_tags
+        self.spotify_metadata = meta_tags["spotify_metadata"]
+        self.provider = "spotify" if meta_tags["spotify_metadata"] else "youtube"
 
     def as_mp3(self):
         """ Embed metadata to MP3 files. """
@@ -61,7 +64,7 @@ class EmbedMetadata:
         audiofile["lyricist"] = meta_tags["artists"][0]["name"]
         audiofile["arranger"] = meta_tags["artists"][0]["name"]
         audiofile["performer"] = meta_tags["artists"][0]["name"]
-        audiofile["website"] = meta_tags["external_urls"]["spotify"]
+        audiofile["website"] = meta_tags["external_urls"][self.provider]
         audiofile["length"] = str(meta_tags["duration"])
         if meta_tags["publisher"]:
             audiofile["encodedby"] = meta_tags["publisher"]
@@ -77,7 +80,7 @@ class EmbedMetadata:
         audiofile["TYER"] = TYER(encoding=3, text=meta_tags["year"])
         if meta_tags["publisher"]:
             audiofile["TPUB"] = TPUB(encoding=3, text=meta_tags["publisher"])
-        audiofile["COMM"] = COMM(encoding=3, text=meta_tags["external_urls"]["spotify"])
+        audiofile["COMM"] = COMM(encoding=3, text=meta_tags["external_urls"][self.provider])
         if meta_tags["lyrics"]:
             audiofile["USLT"] = USLT(
                 encoding=3, desc=u"Lyrics", text=meta_tags["lyrics"]
@@ -105,7 +108,7 @@ class EmbedMetadata:
         audiofile = MP4(music_file)
         self._embed_basic_metadata(audiofile, preset=M4A_TAG_PRESET)
         audiofile[M4A_TAG_PRESET["year"]] = meta_tags["year"]
-        audiofile[M4A_TAG_PRESET["comment"]] = meta_tags["external_urls"]["spotify"]
+        audiofile[M4A_TAG_PRESET["comment"]] = meta_tags["external_urls"][self.provider]
         if meta_tags["lyrics"]:
             audiofile[M4A_TAG_PRESET["lyrics"]] = meta_tags["lyrics"]
         try:
@@ -126,7 +129,7 @@ class EmbedMetadata:
         audiofile = FLAC(music_file)
         self._embed_basic_metadata(audiofile)
         audiofile["year"] = meta_tags["year"]
-        audiofile["comment"] = meta_tags["external_urls"]["spotify"]
+        audiofile["comment"] = meta_tags["external_urls"][self.provider]
         if meta_tags["lyrics"]:
             audiofile["lyrics"] = meta_tags["lyrics"]
 
@@ -145,8 +148,10 @@ class EmbedMetadata:
     def _embed_basic_metadata(self, audiofile, preset=TAG_PRESET):
         meta_tags = self.meta_tags
         audiofile[preset["artist"]] = meta_tags["artists"][0]["name"]
-        audiofile[preset["albumartist"]] = meta_tags["artists"][0]["name"]
-        audiofile[preset["album"]] = meta_tags["album"]["name"]
+        if meta_tags["album"]["artists"][0]["name"]:
+            audiofile[preset["albumartist"]] = meta_tags["album"]["artists"][0]["name"]
+        if meta_tags["album"]["name"]:
+            audiofile[preset["album"]] = meta_tags["album"]["name"]
         audiofile[preset["title"]] = meta_tags["name"]
         audiofile[preset["date"]] = meta_tags["release_date"]
         audiofile[preset["originaldate"]] = meta_tags["release_date"]

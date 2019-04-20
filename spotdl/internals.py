@@ -1,6 +1,7 @@
+from logzero import logger as log
 import os
 import sys
-from logzero import logger as log
+import urllib.request
 
 from spotdl import const
 
@@ -50,7 +51,6 @@ def input_link(links):
 
 def trim_song(tracks_file):
     """ Remove the first song from file. """
-    log.debug("Removing downloaded song from tracks file")
     with open(tracks_file, "r") as file_in:
         data = file_in.read().splitlines(True)
     with open(tracks_file, "w") as file_out:
@@ -253,3 +253,12 @@ def remove_duplicates(tracks):
     local_set = set()
     local_set_add = local_set.add
     return [x for x in tracks if not (x in local_set or local_set_add(x))]
+
+
+def content_available(url):
+    try:
+        response = urllib.request.urlopen(url)
+    except HTTPError:
+        return False
+    else:
+        return response.getcode() < 300

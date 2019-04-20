@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+import sys
+import platform
+import pprint
+import logzero
+from logzero import logger as log
+
 from spotdl import __version__
 from spotdl import const
 from spotdl import handle
@@ -7,11 +13,6 @@ from spotdl import internals
 from spotdl import spotify_tools
 from spotdl import youtube_tools
 from spotdl import downloader
-from logzero import logger as log
-import logzero
-import sys
-import platform
-import pprint
 
 
 def debug_sys_info():
@@ -27,7 +28,8 @@ def match_args():
             track_dl.download_single()
     elif const.args.list:
         if const.args.write_m3u:
-            youtube_tools.generate_m3u(track_file=const.args.list)
+            youtube_tools.generate_m3u(track_file=const.args.list,
+                                       text_file=const.args.write_to)
         else:
             list_dl = downloader.ListDownloader(
                 tracks_file=const.args.list,
@@ -36,21 +38,21 @@ def match_args():
             )
             list_dl.download_list()
     elif const.args.playlist:
-        spotify_tools.write_playlist(playlist_url=const.args.playlist)
+        spotify_tools.write_playlist(playlist_url=const.args.playlist,
+                                     text_file=const.args.write_to)
     elif const.args.album:
-        spotify_tools.write_album(album_url=const.args.album)
+        spotify_tools.write_album(album_url=const.args.album,
+                                  text_file=const.args.write_to)
     elif const.args.all_albums:
-        spotify_tools.write_all_albums_from_artist(artist_url=const.args.all_albums)
+        spotify_tools.write_all_albums_from_artist(artist_url=const.args.all_albums,
+                                                   text_file=const.args.write_to)
     elif const.args.username:
-        spotify_tools.write_user_playlist(username=const.args.username)
+        spotify_tools.write_user_playlist(username=const.args.username,
+                                          text_file=const.args.write_to)
 
 
 def main():
     const.args = handle.get_arguments()
-
-    if const.args.version:
-        print("spotdl {version}".format(version=__version__))
-        sys.exit()
 
     internals.filter_path(const.args.folder)
     youtube_tools.set_api_key()

@@ -1,18 +1,24 @@
 from bs4 import BeautifulSoup
 import urllib
 import pafy
+
 from slugify import slugify
 from logzero import logger as log
+import os
 
 from spotdl import spotify_tools
 from spotdl import internals
 from spotdl import const
 
-import os
-
 # Fix download speed throttle on short duration tracks
 # Read more on mps-youtube/pafy#199
 pafy.g.opener.addheaders.append(("Range", "bytes=0-"))
+
+# Implement unreleased methods on Pafy object
+# More info: https://github.com/mps-youtube/pafy/pull/211
+if pafy.__version__ <= "0.5.4":
+    from spotdl import patcher
+    patcher.patch_pafy()
 
 
 def set_api_key():
@@ -39,9 +45,22 @@ def go_pafy(raw_song, meta_tags=None):
     return track_info
 
 
-def match_video_and_metadata(track, force_pafy=True):
+def match_video_and_metadata(track):
     """ Get and match track data from YouTube and Spotify. """
     meta_tags = None
+
+
+    def fallback_metadata(meta_tags):
+        fallback_metadata_info = "Track not found on Spotify, falling back on YouTube metadata"
+        skip_fallback_metadata_warning = "Fallback condition not met, shall not embed metadata"
+        if meta_tags is None:
+            if const.args.no_fallback_metadata:
+                log.warning(skip_fallback_metadata_warning)
+            else:
+                log.info(fallback_metadata_info)
+                meta_tags = generate_metadata(content)
+        return meta_tags
+
 
     if internals.is_youtube(track):
         log.debug("Input song is a YouTube URL")
@@ -49,14 +68,51 @@ def match_video_and_metadata(track, force_pafy=True):
         track = slugify(content.title).replace("-", " ")
         if not const.args.no_metadata:
             meta_tags = spotify_tools.generate_metadata(track)
+            meta_tags = fallback_metadata(meta_tags)
+
+    elif internals.is_spotify(track):
+        log.debug("Input song is a Spotify URL")
+        # Let it generate metadata, YouTube doesn't know Spotify slang
+        meta_tags = spotify_tools.generate_metadata(track)
+        content = go_pafy(track, meta_tags)
+        if const.args.no_metadata:
+            meta_tags = None
+
     else:
-        if not const.args.no_metadata:
-            meta_tags = spotify_tools.generate_metadata(track)
-        if force_pafy:
-            content = go_pafy(track, meta_tags)
+        log.debug("Input song is plain text based")
+        if const.args.no_metadata:
+            content = go_pafy(track, meta_tags=None)
         else:
-            content = None
+            meta_tags = spotify_tools.generate_metadata(track)
+            content = go_pafy(track, meta_tags=meta_tags)
+            meta_tags = fallback_metadata(meta_tags)
+
     return content, meta_tags
+
+
+def generate_metadata(content):
+    """ Fetch a song's metadata from YouTube. """
+    meta_tags = {"spotify_metadata": False,
+                 "name": content.title,
+                 "artists": [{"name": content.author}],
+                 "duration": content.length,
+                 "external_urls": {"youtube": content.watchv_url},
+                 "album": {"images" : [{"url": content.getbestthumb()}],
+                           "artists": [{"name": None}],"name": None},
+                 "year": content.published.split("-")[0],
+                 "release_date": content.published.split(" ")[0],
+                 "type": "track",
+                 "disc_number": 1,
+                 "track_number": 1,
+                 "total_tracks": 1,
+                 "publisher": None,
+                 "external_ids": {"isrc": None},
+                 "lyrics": None,
+                 "copyright": None,
+                 "genre": None,
+                 }
+
+    return meta_tags
 
 
 def get_youtube_title(content, number=None):
@@ -75,6 +131,8 @@ def generate_m3u(track_file):
     log.info("Generating {0} from {1} YouTube URLs".format(target_file, total_tracks))
     with open(target_file, "w") as output_file:
         output_file.write("#EXTM3U\n\n")
+
+    videos = []
     for n, track in enumerate(tracks, 1):
         content, _ = match_video_and_metadata(track)
         if content is None:
@@ -94,6 +152,9 @@ def generate_m3u(track_file):
             log.debug(m3u_key)
             with open(target_file, "a") as output_file:
                 output_file.write(m3u_key)
+            videos.append(content.watchv_url)
+
+    return videos
 
 
 def download_song(file_name, content):
@@ -167,6 +228,10 @@ class GenerateYouTubeURL:
             )
 
     def _best_match(self, videos):
+        if not videos:
+            log.error("No videos found on YouTube for a given search")
+            return None
+
         """ Select the best matching video from a list of videos. """
         if const.args.manual:
             log.info(self.raw_song)
@@ -240,7 +305,7 @@ class GenerateYouTubeURL:
         search_url = generate_search_url(self.search_query)
         log.debug("Opening URL: {0}".format(search_url))
 
-        item = urllib.request.urlopen(search_url).read()
+        item = self._fetch_response(search_url).read()
         items_parse = BeautifulSoup(item, "html.parser")
 
         videos = []
@@ -319,3 +384,11 @@ class GenerateYouTubeURL:
             return self._best_match(videos)
 
         return videos
+
+    @staticmethod
+    def _fetch_response(url):
+        # XXX: This method exists only because it helps us indirectly
+        # monkey patch `urllib.request.open`, directly monkey patching
+        # `urllib.request.open` causes us to end up in an infinite recursion
+        # during the test since `urllib.request.open` would monkeypatch itself.
+        return urllib.request.urlopen(url)
