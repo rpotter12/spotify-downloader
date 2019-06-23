@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 -
 
 ### Changed
+-
+
+## [1.2.2] - 2019-06-03
+### Fixed
+- Patch bug in Pafy to prefer secure HTTPS ([@ritiek](https://github.com/ritiek)) (#558)
+
+## [1.2.1] - 2019-04-28
+### Fixed
+- Patch bug in Pafy when fetching audiostreams with latest youtube-dl ([@ritiek](https://github.com/ritiek)) (#539)
+
+### Changed
 - Removed duplicate debug log entry from `internals.trim_song` ([@ritiek](https://github.com/ritiek)) (#519)
 - Fix YAMLLoadWarning ([@cyberboysumanjay](https://github.com/cyberboysumanjay)) (#517)
 

@@ -18,7 +18,10 @@ pafy.g.opener.addheaders.append(("Range", "bytes=0-"))
 # More info: https://github.com/mps-youtube/pafy/pull/211
 if pafy.__version__ <= "0.5.4":
     from spotdl import patcher
-    patcher.patch_pafy()
+    pafy_patcher = patcher.PatchPafy()
+    pafy_patcher.patch_getbestthumb()
+    pafy_patcher.patch_process_streams()
+    pafy_patcher.patch_insecure_streams()
 
 
 def set_api_key():
