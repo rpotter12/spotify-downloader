@@ -16,7 +16,14 @@ https://trac.ffmpeg.org/wiki/Encode/AAC
 """
 
 
-def song(input_song, output_song, folder, avconv=False, trim_silence=False):
+def song(
+    input_song,
+    output_song,
+    folder,
+    avconv=False,
+    trim_silence=False,
+    delete_original=True,
+):
     """ Do the audio format conversion. """
     if avconv and trim_silence:
         raise ValueError("avconv does not support trim_silence")
@@ -28,7 +35,9 @@ def song(input_song, output_song, folder, avconv=False, trim_silence=False):
     else:
         return 0
 
-    convert = Converter(input_song, output_song, folder, delete_original=True)
+    convert = Converter(
+        input_song, output_song, folder, delete_original=delete_original
+    )
     if avconv:
         exit_code, command = convert.with_avconv()
     else:
@@ -97,7 +106,9 @@ class Converter:
         return code, command
 
     def with_ffmpeg(self, trim_silence=False):
-        ffmpeg_pre = "ffmpeg -y "
+        ffmpeg_pre = (
+            "ffmpeg -y -nostdin "
+        )  # -nostdin is necessary for spotdl to be able to run in the backgroung.
 
         if not log.level == 10:
             ffmpeg_pre += "-hide_banner -nostats -v panic "
@@ -106,7 +117,7 @@ class Converter:
 
         if self.input_ext == ".m4a":
             if self.output_ext == ".mp3":
-                ffmpeg_params = "-codec:v copy -codec:a libmp3lame -ar 44100 "
+                ffmpeg_params = "-codec:v copy -codec:a libmp3lame -ar 48000 "
             elif self.output_ext == ".webm":
                 ffmpeg_params = "-codec:a libopus -vbr on "
             elif self.output_ext == ".m4a":
@@ -114,12 +125,12 @@ class Converter:
 
         elif self.input_ext == ".webm":
             if self.output_ext == ".mp3":
-                ffmpeg_params = "-codec:a libmp3lame -ar 44100 "
+                ffmpeg_params = "-codec:a libmp3lame -ar 48000 "
             elif self.output_ext == ".m4a":
-                ffmpeg_params = "-cutoff 20000 -codec:a aac -ar 44100 "
+                ffmpeg_params = "-cutoff 20000 -codec:a aac -ar 48000 "
 
         if self.output_ext == ".flac":
-            ffmpeg_params = "-codec:a flac -ar 44100 "
+            ffmpeg_params = "-codec:a flac -ar 48000 "
 
         # add common params for any of the above combination
         ffmpeg_params += "-b:a 192k -vn "

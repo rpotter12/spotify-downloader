@@ -96,6 +96,7 @@ class Downloader:
         self.raw_song = raw_song
         self.number = number
         self.content, self.meta_tags = youtube_tools.match_video_and_metadata(raw_song)
+        self.total_songs = int(self.meta_tags["total_tracks"])
 
     def download_single(self):
         """ Logic behind downloading a song. """
@@ -133,6 +134,7 @@ class Downloader:
                     const.args.folder,
                     avconv=const.args.avconv,
                     trim_silence=const.args.trim_silence,
+                    delete_original=not const.args.no_remove_original,
                 )
             except FileNotFoundError:
                 encoder = "avconv" if const.args.avconv else "ffmpeg"
@@ -157,7 +159,10 @@ class Downloader:
     def refine_songname(self, songname):
         if self.meta_tags is not None:
             refined_songname = internals.format_string(
-                const.args.file_format, self.meta_tags, slugification=True
+                const.args.file_format,
+                self.meta_tags,
+                slugification=True,
+                total_songs=self.total_songs,
             )
             log.debug(
                 'Refining songname from "{0}" to "{1}"'.format(
